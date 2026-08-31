@@ -84,6 +84,7 @@ export default function Home() {
   const [messageError, setMessageError] = useState("");
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [newsletterStatus, setNewsletterStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const cartIconRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -115,6 +116,7 @@ export default function Home() {
   async function handleLogout() {
     await supabase.auth.signOut();
     setUser(null);
+    setMobileMenuOpen(false);
   }
 
   function openMessageBox(food: Food) {
@@ -341,13 +343,13 @@ export default function Home() {
       />
 
       <header className="sticky top-0 z-40 bg-green-700 text-white shadow-md">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-4 px-4 py-4 sm:px-6">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-4 sm:gap-x-6 sm:px-6">
           <Link href="/" className="shrink-0">
             <h1 className="text-2xl font-bold leading-none">Campus Eats</h1>
             <p className="mt-1 text-xs text-green-100">Made by students, for students</p>
           </Link>
 
-          <label className="order-3 flex w-full items-center gap-2 rounded-lg bg-white px-3 py-2 text-gray-700 shadow-sm md:order-none md:max-w-sm md:flex-1">
+          <label className="order-3 flex w-full items-center gap-2 rounded-lg bg-white px-3 py-2 text-gray-700 shadow-sm sm:order-none sm:max-w-sm sm:flex-1">
             <span aria-hidden="true">⌕</span>
             <input
               value={searchQuery}
@@ -358,7 +360,7 @@ export default function Home() {
             />
           </label>
 
-          <nav aria-label="Main navigation" className="flex flex-1 items-center justify-end gap-3 text-sm font-medium sm:gap-4">
+          <nav aria-label="Main navigation" className="hidden flex-1 items-center justify-end gap-3 text-sm font-medium sm:flex sm:gap-4">
             <Link href="/" className="liquid-glass-hover">Home</Link>
             <a href="#available-now" className="liquid-glass-hover">Browse</a>
             <Link href="/sell" className="liquid-glass-hover">Sell</Link>
@@ -369,10 +371,18 @@ export default function Home() {
                   <path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 9.7 9.7 0 0 1-4.1-.9L3 20l1-3.3A8.1 8.1 0 0 1 3 12a8.5 8.5 0 0 1 9-8.5 8.5 8.5 0 0 1 9 8Z" />
                   <path d="M8 12h.01M12 12h.01M16 12h.01" strokeLinecap="round" />
                 </svg>
-                <span className="hidden sm:inline">Messages</span>
+                <span>Messages</span>
               </Link>
             )}
             <Link href={user ? "/dashboard" : "/login"} className="liquid-glass-hover">Profile</Link>
+            {user ? (
+              <button onClick={handleLogout} className="text-green-100 underline">Log out</button>
+            ) : (
+              <Link href="/login" className="rounded bg-white px-3 py-2 text-green-800 hover:bg-green-50">Log in</Link>
+            )}
+          </nav>
+
+          <div className="ml-auto flex items-center gap-2 sm:ml-0">
             <button
               ref={cartIconRef}
               onClick={() => cart.length > 0 && setShowCheckout(true)}
@@ -389,13 +399,45 @@ export default function Home() {
                 </span>
               )}
             </button>
-            {user ? (
-              <button onClick={handleLogout} className="hidden text-green-100 underline sm:inline">Log out</button>
-            ) : (
-              <Link href="/login" className="hidden rounded bg-white px-3 py-2 text-green-800 hover:bg-green-50 sm:inline">Log in</Link>
-            )}
-          </nav>
+
+            <button
+              onClick={() => setMobileMenuOpen((open) => !open)}
+              aria-label="Menu"
+              aria-expanded={mobileMenuOpen}
+              className="flex items-center justify-center rounded-full bg-white/15 p-2.5 text-white sm:hidden"
+            >
+              {mobileMenuOpen ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+                  <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+                  <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
+
+        {mobileMenuOpen && (
+          <div className="border-t border-green-600/60 bg-green-800 px-4 py-3 sm:hidden">
+            <div className="flex flex-col gap-1">
+              <Link href="/" onClick={() => setMobileMenuOpen(false)} className="rounded-lg px-3 py-2.5 text-white hover:bg-green-700">Home</Link>
+              <a href="#available-now" onClick={() => setMobileMenuOpen(false)} className="rounded-lg px-3 py-2.5 text-white hover:bg-green-700">Browse</a>
+              <Link href="/sell" onClick={() => setMobileMenuOpen(false)} className="rounded-lg px-3 py-2.5 text-white hover:bg-green-700">Sell</Link>
+              <Link href="/my-orders" onClick={() => setMobileMenuOpen(false)} className="rounded-lg px-3 py-2.5 text-white hover:bg-green-700">Orders</Link>
+              {user && (
+                <Link href="/messages" onClick={() => setMobileMenuOpen(false)} className="rounded-lg px-3 py-2.5 text-white hover:bg-green-700">Messages</Link>
+              )}
+              <Link href={user ? "/dashboard" : "/login"} onClick={() => setMobileMenuOpen(false)} className="rounded-lg px-3 py-2.5 text-white hover:bg-green-700">Profile</Link>
+              {user ? (
+                <button onClick={handleLogout} className="rounded-lg px-3 py-2.5 text-left text-white hover:bg-green-700">Log out</button>
+              ) : (
+                <Link href="/login" onClick={() => setMobileMenuOpen(false)} className="rounded-lg px-3 py-2.5 text-white hover:bg-green-700">Log in</Link>
+              )}
+            </div>
+          </div>
+        )}
       </header>
 
       <section id="available-now" className="p-6 scroll-mt-36">
@@ -785,8 +827,8 @@ export default function Home() {
             <h4 className="text-white font-semibold mb-3">Contact Us</h4>
             <ul className="space-y-2 text-sm text-gray-400">
               <li>📍 Campus Student Center</li>
-              <li>📞 0249943613</li>
-              <li>✉️ nantomahmicah@gmail.com</li>
+              <li>📞 Add your phone number</li>
+              <li>✉️ Add your email</li>
               <li>🕐 Mon–Sat: 8AM – 9PM</li>
               <li>🕐 Sunday: 12PM – 9PM</li>
             </ul>
@@ -794,7 +836,7 @@ export default function Home() {
         </div>
 
         <div className="border-t border-gray-800 py-4 text-center text-xs text-gray-500">
-          © {new Date().getFullYear()} Campus Eats. Built for students.
+          © {new Date().getFullYear()} Campus Eats. Built by a student, for students.
         </div>
       </footer>
     </main>
