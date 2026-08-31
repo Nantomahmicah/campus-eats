@@ -785,8 +785,8 @@ export default function Home() {
             <h4 className="text-white font-semibold mb-3">Contact Us</h4>
             <ul className="space-y-2 text-sm text-gray-400">
               <li>📍 Campus Student Center</li>
-              <li>📞 Add your phone number</li>
-              <li>✉️ Add your email</li>
+              <li>📞 0249943613</li>
+              <li>✉️ nantomahmicah@gmail.com</li>
               <li>🕐 Mon–Sat: 8AM – 9PM</li>
               <li>🕐 Sunday: 12PM – 9PM</li>
             </ul>
@@ -794,7 +794,7 @@ export default function Home() {
         </div>
 
         <div className="border-t border-gray-800 py-4 text-center text-xs text-gray-500">
-          © {new Date().getFullYear()} Campus Eats. Built by a student, for students.
+          © {new Date().getFullYear()} Campus Eats. Built for students.
         </div>
       </footer>
     </main>
