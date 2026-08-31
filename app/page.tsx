@@ -81,7 +81,8 @@ export default function Home() {
   const [messageFood, setMessageFood] = useState<Food | null>(null);
   const [messageText, setMessageText] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
-  const [messageError, setMessageError] = useState("");
+  const [messageError, setMessageError] = useState("");  const [newsletterEmail, setNewsletterEmail] = useState("");
+  const [newsletterStatus, setNewsletterStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
   const cartIconRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -205,6 +206,15 @@ export default function Home() {
 
   function removeFromCart(index: number) {
     setCart(cart.filter((_, i) => i !== index));
+  }  async function subscribeNewsletter(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newsletterEmail.trim()) return;
+    setNewsletterStatus("sending");
+    const { error } = await supabase
+      .from("newsletter_subscribers")
+      .insert({ email: newsletterEmail.trim() });
+    setNewsletterStatus(error ? "error" : "done");
+    if (!error) setNewsletterEmail("");
   }
 
   function finishOrder() {
@@ -702,6 +712,170 @@ export default function Home() {
           </div>
         </div>
       )}
+          <footer className="mt-16 bg-gray-900 text-gray-300">
+        <div className="border-b border-gray-800 bg-green-800/40">
+          <div className="mx-auto max-w-4xl px-6 py-10 text-center">
+            <h3 className="text-2xl font-bold text-white">Get Exclusive Deals 🍔</h3>
+            <p className="mt-2 text-green-100">
+              Subscribe to our newsletter for special offers, new menu items, and campus food updates.
+            </p>
+            <form onSubmit={subscribeNewsletter} className="mt-5 flex flex-col sm:flex-row gap-2 justify-center max-w-md mx-auto">
+              <input
+                type="email"
+                required
+                value={newsletterEmail}
+                onChange={(e) => setNewsletterEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="flex-1 rounded-lg px-4 py-2 text-gray-900 focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={newsletterStatus === "sending"}
+                className="bg-white text-green-800 font-semibold px-5 py-2 rounded-lg hover:bg-green-50 disabled:opacity-60"
+              >
+                {newsletterStatus === "sending" ? "Subscribing..." : "Subscribe"}
+              </button>
+            </form>
+            {newsletterStatus === "done" && (
+              <p className="mt-2 text-sm text-green-100">Thanks for subscribing! 🎉</p>
+            )}
+            {newsletterStatus === "error" && (
+              <p className="mt-2 text-sm text-red-300">Something went wrong — try again.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="mx-auto max-w-6xl px-6 py-12 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-9 h-9 rounded-full bg-green-600 flex items-center justify-center font-bold text-white text-sm">
+                CE
+              </div>
+              <span className="text-lg font-bold text-white">CampusEats</span>
+            </div>
+            <p className="text-sm text-gray-400">
+              Delicious food delivered right to your doorstep. Fast, fresh, and affordable for students.
+            </p>
+          </div>
+
+          <div>
+            <h4 className="text-white font-semibold mb-3">Quick Links</h4>
+            <ul className="space-y-2 text-sm text-gray-400">
+              <li><a href="/" className="hover:text-white">Home</a></li>
+              <li><a href="#available-now" className="hover:text-white">Menu</a></li>
+              <li><a href="/sell" className="hover:text-white">Sell food</a></li>
+              <li><a href="/my-orders" className="hover:text-white">My orders</a></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-white font-semibold mb-3">Categories</h4>
+            <ul className="space-y-2 text-sm text-gray-400">
+              <li><a href="#available-now" className="hover:text-white">Popular items</a></li>
+              <li><a href="#available-now" className="hover:text-white">Snacks</a></li>
+              <li><a href="#available-now" className="hover:text-white">Drinks</a></li>
+              <li><a href="#available-now" className="hover:text-white">Main dishes</a></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-white font-semibold mb-3">Contact Us</h4>
+            <ul className="space-y-2 text-sm text-gray-400">
+              <li>📍 Campus Student Center</li>
+              <li>📞 Add your phone number</li>
+              <li>✉️ Add your email</li>
+              <li>🕐 Mon–Sat: 8AM – 9PM</li>
+              <li>🕐 Sunday: 12PM – 9PM</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="border-t border-gray-800 py-4 text-center text-xs text-gray-500">
+          © {new Date().getFullYear()} Campus Eats. Built by a student, for students.
+        </div>
+      </footer>
+          <footer className="mt-16 bg-gray-900 text-gray-300">
+        <div className="border-b border-gray-800 bg-green-800/40">
+          <div className="mx-auto max-w-4xl px-6 py-10 text-center">
+            <h3 className="text-2xl font-bold text-white">Get Exclusive Deals 🍔</h3>
+            <p className="mt-2 text-green-100">
+              Subscribe to our newsletter for special offers, new menu items, and campus food updates.
+            </p>
+            <form onSubmit={subscribeNewsletter} className="mt-5 flex flex-col sm:flex-row gap-2 justify-center max-w-md mx-auto">
+              <input
+                type="email"
+                required
+                value={newsletterEmail}
+                onChange={(e) => setNewsletterEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="flex-1 rounded-lg px-4 py-2 text-gray-900 focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={newsletterStatus === "sending"}
+                className="bg-white text-green-800 font-semibold px-5 py-2 rounded-lg hover:bg-green-50 disabled:opacity-60"
+              >
+                {newsletterStatus === "sending" ? "Subscribing..." : "Subscribe"}
+              </button>
+            </form>
+            {newsletterStatus === "done" && (
+              <p className="mt-2 text-sm text-green-100">Thanks for subscribing! 🎉</p>
+            )}
+            {newsletterStatus === "error" && (
+              <p className="mt-2 text-sm text-red-300">Something went wrong — try again.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="mx-auto max-w-6xl px-6 py-12 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-9 h-9 rounded-full bg-green-600 flex items-center justify-center font-bold text-white text-sm">
+                CE
+              </div>
+              <span className="text-lg font-bold text-white">CampusEats</span>
+            </div>
+            <p className="text-sm text-gray-400">
+              Delicious food delivered right to your doorstep. Fast, fresh, and affordable for students.
+            </p>
+          </div>
+
+          <div>
+            <h4 className="text-white font-semibold mb-3">Quick Links</h4>
+            <ul className="space-y-2 text-sm text-gray-400">
+              <li><a href="/" className="hover:text-white">Home</a></li>
+              <li><a href="#available-now" className="hover:text-white">Menu</a></li>
+              <li><a href="/sell" className="hover:text-white">Sell food</a></li>
+              <li><a href="/my-orders" className="hover:text-white">My orders</a></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-white font-semibold mb-3">Categories</h4>
+            <ul className="space-y-2 text-sm text-gray-400">
+              <li><a href="#available-now" className="hover:text-white">Popular items</a></li>
+              <li><a href="#available-now" className="hover:text-white">Snacks</a></li>
+              <li><a href="#available-now" className="hover:text-white">Drinks</a></li>
+              <li><a href="#available-now" className="hover:text-white">Main dishes</a></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-white font-semibold mb-3">Contact Us</h4>
+            <ul className="space-y-2 text-sm text-gray-400">
+              <li>📍 Campus Student Center</li>
+              <li>📞 Add your phone number</li>
+              <li>✉️ Add your email</li>
+              <li>🕐 Mon–Sat: 8AM – 9PM</li>
+              <li>🕐 Sunday: 12PM – 9PM</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="border-t border-gray-800 py-4 text-center text-xs text-gray-500">
+          © {new Date().getFullYear()} Campus Eats. Built by a student, for students.
+        </div>
+      </footer>
     </main>
   );
 }

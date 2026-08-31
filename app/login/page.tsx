@@ -14,6 +14,8 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [resetSent, setResetSent] = useState(false);
+  const [resetError, setResetError] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -34,6 +36,23 @@ function LoginForm() {
       setErrorMsg(message);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleForgotPassword() {
+    setResetError("");
+    setResetSent(false);
+    if (!email.trim()) {
+      setResetError("Type your email above first, then tap this again.");
+      return;
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) {
+      setResetError(error.message);
+    } else {
+      setResetSent(true);
     }
   }
 
@@ -95,6 +114,27 @@ function LoginForm() {
               placeholder="••••••••"
             />
           </div>
+
+          {mode === "login" && (
+            <div className="text-right -mt-2">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                className="text-xs font-medium text-green-700 hover:underline"
+              >
+                Forgot password?
+              </button>
+            </div>
+          )}
+
+          {resetSent && (
+            <div className="rounded-md bg-green-50 p-3 text-sm text-green-700">
+              Check your email for a link to reset your password.
+            </div>
+          )}
+          {resetError && (
+            <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-700">{resetError}</div>
+          )}
 
           {errorMsg ? (
             <div className="rounded-md bg-red-50 p-3 text-sm text-red-600">{errorMsg}</div>
