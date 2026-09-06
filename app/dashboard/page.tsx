@@ -41,6 +41,11 @@ export default function Dashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingHours, setSavingHours] = useState(false);
+  const [editingFoodId, setEditingFoodId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editPrice, setEditPrice] = useState("");
+  const [savingFoodId, setSavingFoodId] = useState<number | null>(null);
+  const [foodError, setFoodError] = useState("");
 
   useEffect(() => {
     async function init() {
@@ -111,6 +116,52 @@ export default function Dashboard() {
     }
   }
 
+  function startEditingFood(food: Food) {
+    setEditingFoodId(food.id);
+    setEditName(food.name);
+    setEditPrice(String(food.price));
+    setFoodError("");
+  }
+
+  function cancelEditingFood() {
+    setEditingFoodId(null);
+    setEditName("");
+    setEditPrice("");
+    setFoodError("");
+  }
+
+  async function saveFoodEdit(foodId: number) {
+    const trimmedName = editName.trim();
+    const parsedPrice = parseFloat(editPrice);
+
+    if (!trimmedName) {
+      setFoodError("Name can't be empty.");
+      return;
+    }
+    if (isNaN(parsedPrice) || parsedPrice <= 0) {
+      setFoodError("Enter a valid price.");
+      return;
+    }
+
+    setSavingFoodId(foodId);
+    setFoodError("");
+
+    const { error } = await supabase
+      .from("Foods")
+      .update({ name: trimmedName, price: parsedPrice })
+      .eq("id", foodId);
+
+    if (error) {
+      setFoodError(error.message);
+    } else {
+      setFoods((prev) =>
+        prev.map((f) => (f.id === foodId ? { ...f, name: trimmedName, price: parsedPrice } : f))
+      );
+      setEditingFoodId(null);
+    }
+    setSavingFoodId(null);
+  }
+
   async function updateOrderStatus(orderId: number, newStatus: string) {
     const { error } = await supabase
       .from("order_items")
@@ -140,12 +191,22 @@ export default function Dashboard() {
   if (!seller) {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-        <div className="bg-white rounded-lg shadow p-6 max-w-sm text-center">
-          <p className="text-gray-600 mb-4">
-            You don&apos;t have a seller profile yet. Add your first food item to get started.
+        <div className="bg-white rounded-lg shadow p-6 max-w-sm text-center space-y-4">
+          <p className="text-gray-600">
+            This page is for sellers. Looking for your own orders instead?
           </p>
-          <a href="/sell" className="bg-green-700 text-white px-4 py-2 rounded font-semibold">
-            Add food item
+          <a
+            href="/my-orders"
+            className="block bg-green-700 text-white px-4 py-2 rounded font-semibold"
+          >
+            View my orders
+          </a>
+          <p className="text-gray-400 text-xs">— or —</p>
+          <a
+            href="/sell"
+            className="block text-green-700 underline text-sm font-medium"
+          >
+            Become a seller and add your first food item
           </a>
         </div>
       </main>
@@ -215,39 +276,98 @@ export default function Dashboard() {
             <p className="text-gray-700 text-sm">No food items yet.</p>
           )}
           <div className="space-y-2">
-            {foods.map((food) => (
-              <div
-                key={food.id}
-                className="flex justify-between items-center border rounded p-2"
-              >
-                <div className="flex items-center gap-3">
-                  {food.image_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={food.image_url}
-                      alt={food.name}
-                      className="w-12 h-12 object-cover rounded"
-                    />
+            {foods.map((food) => {
+              const isEditing = editingFoodId === food.id;
+              return (
+                <div key={food.id} className="border rounded p-2">
+                  {isEditing ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3">
+                        {food.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={food.image_url}
+                            alt={food.name}
+                            className="w-12 h-12 object-cover rounded"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 bg-gray-100 rounded" />
+                        )}
+                        <div className="flex-1 flex gap-2">
+                          <input
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            placeholder="Food name"
+                            className="border rounded px-2 py-1 text-sm flex-1"
+                          />
+                          <input
+                            value={editPrice}
+                            onChange={(e) => setEditPrice(e.target.value)}
+                            type="number"
+                            step="0.01"
+                            placeholder="Price"
+                            className="border rounded px-2 py-1 text-sm w-24"
+                          />
+                        </div>
+                      </div>
+                      {foodError && <p className="text-xs text-red-600">{foodError}</p>}
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          onClick={cancelEditingFood}
+                          className="text-xs px-3 py-1 rounded-full font-medium bg-gray-100 text-gray-700"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => saveFoodEdit(food.id)}
+                          disabled={savingFoodId === food.id}
+                          className="text-xs px-3 py-1 rounded-full font-medium bg-green-600 text-white disabled:opacity-50"
+                        >
+                          {savingFoodId === food.id ? "Saving..." : "Save"}
+                        </button>
+                      </div>
+                    </div>
                   ) : (
-                    <div className="w-12 h-12 bg-gray-100 rounded" />
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-3">
+                        {food.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={food.image_url}
+                            alt={food.name}
+                            className="w-12 h-12 object-cover rounded"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 bg-gray-100 rounded" />
+                        )}
+                        <div>
+                          <p className="font-medium text-gray-900">{food.name}</p>
+                          <p className="text-sm text-gray-700">GH₵{food.price}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => startEditingFood(food)}
+                          className="text-xs px-3 py-1 rounded-full font-medium bg-blue-100 text-blue-800"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => toggleFoodAvailable(food.id, food.is_available)}
+                          className={`text-xs px-3 py-1 rounded-full font-medium ${
+                            food.is_available
+                              ? "bg-green-100 text-green-800"
+                              : "bg-gray-200 text-gray-600"
+                          }`}
+                        >
+                          {food.is_available ? "Available" : "Sold out"}
+                        </button>
+                      </div>
+                    </div>
                   )}
-                  <div>
-                    <p className="font-medium  text-gray-900">{food.name}</p>
-                    <p className="text-sm text-gray-700">GH₵{food.price}</p>
-                  </div>
                 </div>
-                <button
-                  onClick={() => toggleFoodAvailable(food.id, food.is_available)}
-                  className={`text-xs px-3 py-1 rounded-full font-medium ${
-                    food.is_available
-                      ? "bg-green-100 text-green-800"
-                      : "bg-gray-200 text-gray-600"
-                  }`}
-                >
-                  {food.is_available ? "Available" : "Sold out"}
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
