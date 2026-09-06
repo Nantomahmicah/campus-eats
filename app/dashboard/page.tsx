@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../Lib/supabase";
 import type { User } from "@supabase/supabase-js";
+import PayoutSetup from "../components/PayoutSetup";
 
 type Seller = {
   id: number;
@@ -13,6 +14,9 @@ type Seller = {
   is_open: boolean;
   opens_at: string | null;
   closes_at: string | null;
+  paystack_subaccount_code: string | null;
+  payout_method: string | null;
+  payout_account_name: string | null;
 };
 
 type Food = {
@@ -268,6 +272,16 @@ export default function Dashboard() {
             {savingHours && <span className="text-xs text-gray-400">Saving...</span>}
           </div>
         </div>
+
+        {/* Payout details */}
+        <PayoutSetup
+          sellerId={seller.id}
+          businessName={seller.business_name}
+          currentSubaccountCode={seller.paystack_subaccount_code}
+          currentPayoutMethod={seller.payout_method}
+          currentAccountName={seller.payout_account_name}
+          onSaved={(details) => setSeller({ ...seller, ...details })}
+        />
 
         {/* Food items */}
         <div className="bg-white rounded-lg shadow p-4">

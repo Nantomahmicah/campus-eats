@@ -23,7 +23,14 @@ type Food = {
     phone_number: string | null;
     open_at: string | null;
     close_at: string | null;
+    paystack_subaccount_code: string | null;
   } | null;
+};
+
+type PaystackSplit = {
+  type: "flat" | "percentage";
+  bearer_type: "account" | "all" | "all-proportional" | "subaccount";
+  subaccounts: { subaccount: string; share: number }[];
 };
 
 type PaystackConfig = {
@@ -32,6 +39,7 @@ type PaystackConfig = {
   amount: number;
   currency: string;
   channels?: string[];
+  split?: PaystackSplit;
   callback: (response: { reference: string }) => void;
   onClose: () => void;
 };
@@ -101,7 +109,7 @@ export default function Home() {
 
       const { data, error } = await supabase
         .from("Foods")
-        .select("id, name, price, seller_id, image_url, is_available, pickup_minutes, delivery_minutes, rating, rating_count, sellers(business_name, user_id, location, phone_number, open_at, close_at)");
+        .select("id, name, price, seller_id, image_url, is_available, pickup_minutes, delivery_minutes, rating, rating_count, sellers(business_name, user_id, location, phone_number, open_at, close_at, paystack_subaccount_code)");
 
       if (error) {
         console.error("Error loading foods:", error);
@@ -281,12 +289,35 @@ export default function Home() {
       const PaystackPop = (window as unknown as { PaystackPop: PaystackPopType }).PaystackPop;
       const emailForPaystack = user?.email ?? `${buyerPhone.replace(/\D/g, "")}@campuseats.local`;
 
+      // Split the payment so each seller automatically receives 95% of their
+      // own items' value, and Campus Eats keeps 5% — even when a cart mixes
+      // items from several sellers in one checkout.
+      const subtotalsBySeller = new Map<string, number>();
+      for (const item of cart) {
+        const code = item.sellers?.paystack_subaccount_code;
+        if (!code) continue; // seller hasn't set up payouts yet — their share stays with the platform for now
+        subtotalsBySeller.set(code, (subtotalsBySeller.get(code) ?? 0) + item.price);
+      }
+
+      let split: PaystackSplit | undefined;
+      if (subtotalsBySeller.size > 0) {
+        split = {
+          type: "flat",
+          bearer_type: "account",
+          subaccounts: Array.from(subtotalsBySeller.entries()).map(([subaccount, subtotal]) => ({
+            subaccount,
+            share: Math.round(subtotal * 0.95 * 100), // 95% of this seller's subtotal, in pesewas
+          })),
+        };
+      }
+
       const handler = PaystackPop.setup({
         key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY!,
         email: emailForPaystack,
         amount: Math.round(total * 100),
         currency: "GHS",
         channels: payment === "momo" ? ["mobile_money"] : ["card"],
+        ...(split ? { split } : {}),
         callback: (response) => {
           (async () => {
             try {
