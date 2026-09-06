@@ -160,11 +160,16 @@ export default function Dashboard() {
             <h1 className="text-2xl font-bold">{seller.business_name}</h1>
             <p className="text-gray-700 text-sm">{user?.email}</p>
           </div>
-          <a href="/sell" className="text-green-700 underline text-sm">
-            + Add food item
-          </a>
+          <div className="flex items-center gap-4">
+            <a href="/messages" className="text-green-700 underline text-sm">
+              Messages
+            </a>
+            <a href="/sell" className="text-green-700 underline text-sm">
+              + Add food item
+            </a>
+          </div>
         </div>
-        </div>
+
 
         {/* Shop status */}
         <div className="bg-white rounded-lg shadow p-4">
@@ -286,6 +291,7 @@ export default function Dashboard() {
             ))}
           </div>
         </div>
+      </div>
     </main>
   )
 };

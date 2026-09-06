@@ -148,6 +148,8 @@ export default function Home() {
       sender_id: user.id,
       recipient_id: messageFood.sellers.user_id,
       food_id: messageFood.id,
+      food_name: messageFood.name,
+      sender_name: user.user_metadata?.buyer_name ?? user.email ?? "A buyer",
       body: messageText.trim(),
     });
 
@@ -156,6 +158,7 @@ export default function Home() {
     } else {
       setMessageFood(null);
       setMessageText("");
+      window.location.href = "/messages";
     }
     setSendingMessage(false);
   }
