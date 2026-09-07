@@ -86,6 +86,12 @@ export default function Home() {
   const [justAddedId, setJustAddedId] = useState<number | null>(null);
   const [cartBounce, setCartBounce] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [pastOrderFoodIds, setPastOrderFoodIds] = useState<Set<number>>(new Set());
+  const [usualFood, setUsualFood] = useState<Food | null>(null);
+  const [showWelcomeBack, setShowWelcomeBack] = useState(false);
+  const [quickFilter, setQuickFilter] = useState<"all" | "new" | "cheap" | "top-rated" | "available">(
+    "all"
+  );
   const [messageFood, setMessageFood] = useState<Food | null>(null);
   const [messageText, setMessageText] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -114,7 +120,32 @@ export default function Home() {
       if (error) {
         console.error("Error loading foods:", error);
       } else {
-        setFoods(data as unknown as Food[]);
+        const loadedFoods = data as unknown as Food[];
+        setFoods(loadedFoods);
+
+        if (userData.user) {
+          const { data: pastOrders } = await supabase
+            .from("order_items")
+            .select("food_id")
+            .eq("order_user_id", userData.user.id);
+
+          if (pastOrders && pastOrders.length > 0) {
+            const idSet = new Set<number>(pastOrders.map((o: { food_id: number }) => o.food_id));
+            setPastOrderFoodIds(idSet);
+
+            const counts = new Map<number, number>();
+            for (const o of pastOrders as { food_id: number }[]) {
+              counts.set(o.food_id, (counts.get(o.food_id) ?? 0) + 1);
+            }
+            const mostOrderedId = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+            const usual = loadedFoods.find((f) => f.id === mostOrderedId && f.is_available) ?? null;
+
+            if (usual) {
+              setUsualFood(usual);
+              setShowWelcomeBack(true);
+            }
+          }
+        }
       }
       setLoading(false);
     }
@@ -358,12 +389,17 @@ export default function Home() {
   const checkoutReady = payment && buyerName && buyerPhone && (fulfillmentMethod === "pickup" || deliveryLocation.trim());
   const filteredFoods = foods.filter((food) => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return true;
-
-    return (
+    const matchesQuery =
+      !query ||
       food.name.toLowerCase().includes(query) ||
-      food.sellers?.business_name?.toLowerCase().includes(query)
-    );
+      food.sellers?.business_name?.toLowerCase().includes(query);
+    if (!matchesQuery) return false;
+
+    if (quickFilter === "new") return !pastOrderFoodIds.has(food.id);
+    if (quickFilter === "cheap") return food.price <= 10;
+    if (quickFilter === "top-rated") return (food.rating ?? 0) >= 4;
+    if (quickFilter === "available") return food.is_available;
+    return true;
   });
 
   return (
@@ -488,6 +524,62 @@ export default function Home() {
         {!loading && foods.length > 0 && filteredFoods.length === 0 && (
           <p className="text-gray-100">No food or sellers match &ldquo;{searchQuery}&rdquo;.</p>
         )}
+
+        {showWelcomeBack && usualFood && (
+          <div className="mb-4 flex flex-col gap-3 rounded-2xl bg-white/95 p-4 shadow sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-bold text-gray-900">Welcome back! 👋</p>
+              <p className="text-sm text-gray-600">
+                Fancy your usual — <span className="font-semibold">{usualFood.name}</span> (GH₵
+                {usualFood.price}) from {usualFood.sellers?.business_name}?
+              </p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={(e) => {
+                  addToCart(usualFood, e.currentTarget);
+                  setShowWelcomeBack(false);
+                }}
+                className="rounded-full bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+              >
+                Order my usual
+              </button>
+              <button
+                onClick={() => {
+                  setQuickFilter("new");
+                  setShowWelcomeBack(false);
+                }}
+                className="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200"
+              >
+                Something new today
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="mb-4 flex flex-wrap gap-2">
+          {(
+            [
+              { key: "all", label: "All" },
+              { key: "new", label: "🆕 New to me" },
+              { key: "cheap", label: "💸 Under GH₵10" },
+              { key: "top-rated", label: "⭐ Top rated" },
+              { key: "available", label: "✅ Available now" },
+            ] as const
+          ).map((chip) => (
+            <button
+              key={chip.key}
+              onClick={() => setQuickFilter(chip.key)}
+              className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                quickFilter === chip.key
+                  ? "bg-green-600 text-white"
+                  : "bg-white/90 text-gray-700 hover:bg-white"
+              }`}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {filteredFoods.map((food) => (
