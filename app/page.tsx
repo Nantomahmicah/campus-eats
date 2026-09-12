@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "../Lib/supabase";
+import { supabase } from "../app/Lib/supabase";
 import type { User } from "@supabase/supabase-js";
-import PayoutSetup from "../components/PayoutSetup";
-import SellerEarnings from "../components/SellerEarnings";
-import FoodOptionsManager from "../components/FoodOptionsManager";
+import PayoutSetup from "../app/components/PayoutSetup";
+import SellerEarnings from "../app/components/SellerEarnings";
+import FoodOptionsManager from "../app/components/OptionsManager";
 
 type Seller = {
   id: number;
