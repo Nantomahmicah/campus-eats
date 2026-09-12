@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../Lib/supabase";
 import type { User } from "@supabase/supabase-js";
 import PayoutSetup from "../components/PayoutSetup";
+import SellerEarnings from "../components/SellerEarnings";
+import FoodOptionsManager from "../components/OptionsManager";
+
 
 type Seller = {
   id: number;
@@ -50,6 +53,7 @@ export default function Dashboard() {
   const [editPrice, setEditPrice] = useState("");
   const [savingFoodId, setSavingFoodId] = useState<number | null>(null);
   const [foodError, setFoodError] = useState("");
+  const [expandedOptionsFoodId, setExpandedOptionsFoodId] = useState<number | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -283,6 +287,9 @@ export default function Dashboard() {
           onSaved={(details) => setSeller({ ...seller, ...details })}
         />
 
+        {/* Earnings */}
+        <SellerEarnings sellerId={seller.id} subaccountCode={seller.paystack_subaccount_code} />
+
         {/* Food items */}
         <div className="bg-white rounded-lg shadow p-4">
           <h2 className="font-bold text-gray-900">Your food items</h2>
@@ -367,6 +374,16 @@ export default function Dashboard() {
                           Edit
                         </button>
                         <button
+                          onClick={() =>
+                            setExpandedOptionsFoodId(
+                              expandedOptionsFoodId === food.id ? null : food.id
+                            )
+                          }
+                          className="text-xs px-3 py-1 rounded-full font-medium bg-purple-100 text-purple-800"
+                        >
+                          {expandedOptionsFoodId === food.id ? "Hide options" : "Sizes & add-ons"}
+                        </button>
+                        <button
                           onClick={() => toggleFoodAvailable(food.id, food.is_available)}
                           className={`text-xs px-3 py-1 rounded-full font-medium ${
                             food.is_available
@@ -378,6 +395,9 @@ export default function Dashboard() {
                         </button>
                       </div>
                     </div>
+                  )}
+                  {!isEditing && expandedOptionsFoodId === food.id && (
+                    <FoodOptionsManager foodId={food.id} />
                   )}
                 </div>
               );
@@ -428,4 +448,4 @@ export default function Dashboard() {
       </div>
     </main>
   )
-};
+}

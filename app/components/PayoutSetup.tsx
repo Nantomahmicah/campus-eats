@@ -41,20 +41,55 @@ export default function PayoutSetup({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!editing) return;
-    setLoadingBanks(true);
+  const resetForm = () => {
     setBankCode("");
     setResolvedName(null);
     setError("");
-    fetch(`/api/paystack-banks?type=${method === "momo" ? "mobile_money" : "ghipss"}`)
-      .then((res) => res.json())
-      .then((data) => {
+  };
+
+  const startEditing = () => {
+    setEditing(true);
+    resetForm();
+  };
+
+  const handleMethodChange = (nextMethod: "momo" | "bank") => {
+    setMethod(nextMethod);
+    resetForm();
+  };
+
+  useEffect(() => {
+    if (!editing) return;
+
+    let cancelled = false;
+
+    async function loadBanks() {
+      setLoadingBanks(true);
+      setBankCode("");
+      setResolvedName(null);
+      setError("");
+
+      try {
+        const res = await fetch(
+          `/api/paystack-banks?type=${method === "momo" ? "mobile_money" : "ghipss"}`
+        );
+        const data = await res.json();
+
+        if (cancelled) return;
+
         if (data.banks) setBanks(data.banks);
         else setError(data.error || "Could not load providers");
-      })
-      .catch(() => setError("Could not load providers"))
-      .finally(() => setLoadingBanks(false));
+      } catch {
+        if (!cancelled) setError("Could not load providers");
+      } finally {
+        if (!cancelled) setLoadingBanks(false);
+      }
+    }
+
+    void loadBanks();
+
+    return () => {
+      cancelled = true;
+    };
   }, [method, editing]);
 
   async function verifyAccount() {
@@ -131,7 +166,7 @@ export default function PayoutSetup({
             </p>
           </div>
           <button
-            onClick={() => setEditing(true)}
+            onClick={startEditing}
             className="text-xs px-3 py-1 rounded-full font-medium bg-blue-100 text-blue-800 h-fit"
           >
             Update
@@ -147,10 +182,14 @@ export default function PayoutSetup({
       <p className="text-xs text-gray-500">
         You&apos;ll receive 95% of each order directly. Campus Eats keeps 5%.
       </p>
+      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-2">
+        Heads up: your very first payout can take a little longer while Paystack verifies your
+        account. After that, payouts follow their normal schedule.
+      </p>
 
       <div className="flex gap-2">
         <button
-          onClick={() => setMethod("momo")}
+          onClick={() => handleMethodChange("momo")}
           className={`px-3 py-1.5 rounded-full text-sm font-medium ${
             method === "momo" ? "bg-green-600 text-white" : "bg-gray-100 text-gray-700"
           }`}
@@ -158,7 +197,7 @@ export default function PayoutSetup({
           Mobile Money
         </button>
         <button
-          onClick={() => setMethod("bank")}
+          onClick={() => handleMethodChange("bank")}
           className={`px-3 py-1.5 rounded-full text-sm font-medium ${
             method === "bank" ? "bg-green-600 text-white" : "bg-gray-100 text-gray-700"
           }`}
@@ -221,6 +260,11 @@ export default function PayoutSetup({
           </p>
         </div>
       )}
+
+      <p className="text-xs text-gray-400">
+        Note: your first payout may take a little longer than usual while Paystack verifies your
+        account. After that, payments settle to you automatically on their normal schedule.
+      </p>
 
       {error && <p className="text-xs text-red-600">{error}</p>}
 
