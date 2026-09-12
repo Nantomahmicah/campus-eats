@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { supabase } from "./Lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
-type FoodOption = { id: number; name: string; price: number };
+type FoodOption = { id: number; name: string; price: number; image_url?: string | null };
 
 type Food = {
   id: number;
@@ -128,7 +128,7 @@ export default function Home() {
 
       const { data, error } = await supabase
         .from("Foods")
-        .select("id, name, price, seller_id, image_url, is_available, pickup_minutes, delivery_minutes, rating, rating_count, sellers(business_name, user_id, location, phone_number, open_at, close_at, paystack_subaccount_code), food_sizes(id, name, price), food_addons(id, name, price)");
+        .select("id, name, price, seller_id, image_url, is_available, pickup_minutes, delivery_minutes, rating, rating_count, sellers(business_name, user_id, location, phone_number, open_at, close_at, paystack_subaccount_code), food_sizes(id, name, price), food_addons(id, name, price, image_url)");
 
       if (error) {
         console.error("Error loading foods:", error);
@@ -460,6 +460,22 @@ export default function Home() {
     return true;
   });
 
+  // Group foods by seller so each seller's products sit together as one
+  // market slot on the page, instead of a single mixed grid.
+  const sellerGroups = useMemo(() => {
+    const map = new Map<number, { sellerId: number; sellerName: string; foods: Food[] }>();
+    for (const food of filteredFoods) {
+      const sellerId = food.seller_id;
+      const sellerName = food.sellers?.business_name ?? "Unknown seller";
+      if (!map.has(sellerId)) {
+        map.set(sellerId, { sellerId, sellerName, foods: [] });
+      }
+      map.get(sellerId)!.foods.push(food);
+    }
+    return Array.from(map.values()).sort((a, b) => a.sellerName.localeCompare(b.sellerName));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredFoods]);
+
   return (
     <main className="min-h-screen pb-32 relative">
       <div
@@ -639,93 +655,105 @@ export default function Home() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {filteredFoods.map((food) => (
-            <div
-              key={food.id}
-              className={`food-card-hover bg-white rounded-lg shadow overflow-hidden border border-gray-200 ${
-                food.is_available ? "" : "opacity-80"
-              }`}
-            >
-              {food.image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={food.image_url}
-                  alt={food.name}
-                  className="w-full h-40 object-cover"
-                />
-              ) : (
-                <div className="w-full h-40 bg-gray-100 flex items-center justify-center text-gray-500 text-sm">
-                  No photo
-                </div>
-              )}
-              <div className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="font-bold text-lg text-gray-900">{food.name}</h3>
-                    <p className="text-gray-700 text-sm">
-                      {food.sellers?.business_name ?? "Unknown seller"}
-                    </p>
+        <div className="space-y-8">
+          {sellerGroups.map(({ sellerId, sellerName, foods: sellerFoods }) => (
+            <div key={sellerId} className="rounded-2xl bg-white/95 p-4 sm:p-5 shadow">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-lg font-bold text-gray-900">{sellerName}</h2>
+                <span className="text-xs font-medium text-gray-500">
+                  {sellerFoods.length} item{sellerFoods.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {sellerFoods.map((food) => (
+                  <div
+                    key={food.id}
+                    className={`food-card-hover bg-white rounded-lg shadow overflow-hidden border border-gray-200 ${
+                      food.is_available ? "" : "opacity-80"
+                    }`}
+                  >
+                    {food.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={food.image_url}
+                        alt={food.name}
+                        className="w-full h-40 object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-40 bg-gray-100 flex items-center justify-center text-gray-500 text-sm">
+                        No photo
+                      </div>
+                    )}
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-bold text-lg text-gray-900">{food.name}</h3>
+                          <p className="text-gray-700 text-sm">
+                            {food.sellers?.business_name ?? "Unknown seller"}
+                          </p>
+                        </div>
+                        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          food.is_available
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-200 text-gray-700"
+                        }`}>
+                          {food.is_available ? "Available now" : "Sold out"}
+                        </span>
+                      </div>
+                      <div className="mt-3 space-y-1.5 text-xs text-gray-600">
+                        <p>📍 {food.sellers?.location ?? "On campus"} <span className="text-gray-400">· nearby</span></p>
+                        {food.sellers?.phone_number && (
+                          <p>📞 <a href={`tel:${food.sellers.phone_number}`} className="font-medium text-green-700 hover:underline">{food.sellers.phone_number}</a></p>
+                        )}
+                        <p>🟢 {food.sellers?.open_at && food.sellers?.close_at
+                          ? `Open ${food.sellers.open_at} – ${food.sellers.close_at}`
+                          : "Opening hours to be confirmed"}
+                        </p>
+                        <p>
+                          🕒 {food.pickup_minutes ? `Pickup in ${food.pickup_minutes} min` : "Pickup time to be confirmed"}
+                          <span className="text-gray-400"> · </span>
+                          {food.delivery_minutes ? `Delivery in ${food.delivery_minutes} min` : "Delivery time to be confirmed"}
+                        </p>
+                        <p>
+                          ★ {food.rating != null
+                            ? <><span className="font-medium text-gray-700">{food.rating.toFixed(1)}</span> <span className="text-gray-400">({food.rating_count ?? 0} ratings)</span></>
+                            : <><span className="font-medium text-gray-700">Not rated yet</span></>}
+                        </p>
+                      </div>
+                      <p className="text-green-700 font-semibold mt-2">
+                        {food.food_sizes && food.food_sizes.length > 0
+                          ? `From GH₵${Math.min(...food.food_sizes.map((s) => s.price))}`
+                          : `GH₵${food.price}`}
+                      </p>
+                      <button
+                        onClick={(e) => addToCart(food, e.currentTarget.closest(".rounded-lg"))}
+                        disabled={!food.is_available}
+                        className={`mt-3 w-full py-2 rounded font-medium transition-all duration-200 disabled:cursor-not-allowed ${
+                          justAddedId === food.id
+                            ? "bg-green-900 text-white scale-105"
+                            : food.is_available
+                              ? "bg-green-700 text-white hover:bg-green-800"
+                              : "bg-gray-300 text-gray-600"
+                        }`}
+                      >
+                        {food.is_available
+                          ? justAddedId === food.id
+                            ? "Added ✓"
+                            : (food.food_sizes?.length ?? 0) > 0 || (food.food_addons?.length ?? 0) > 0
+                              ? "Choose options"
+                              : "Add to Cart"
+                          : "Unavailable"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openMessageBox(food)}
+                        className="mt-2 w-full rounded border border-green-700 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
+                      >
+                        Message seller
+                      </button>
+                    </div>
                   </div>
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    food.is_available
-                      ? "bg-green-100 text-green-800"
-                      : "bg-gray-200 text-gray-700"
-                  }`}>
-                    {food.is_available ? "Available now" : "Sold out"}
-                  </span>
-                </div>
-                <div className="mt-3 space-y-1.5 text-xs text-gray-600">
-                  <p>📍 {food.sellers?.location ?? "On campus"} <span className="text-gray-400">· nearby</span></p>
-                  {food.sellers?.phone_number && (
-                    <p>📞 <a href={`tel:${food.sellers.phone_number}`} className="font-medium text-green-700 hover:underline">{food.sellers.phone_number}</a></p>
-                  )}
-                  <p>🟢 {food.sellers?.open_at && food.sellers?.close_at
-                    ? `Open ${food.sellers.open_at} – ${food.sellers.close_at}`
-                    : "Opening hours to be confirmed"}
-                  </p>
-                  <p>
-                    🕒 {food.pickup_minutes ? `Pickup in ${food.pickup_minutes} min` : "Pickup time to be confirmed"}
-                    <span className="text-gray-400"> · </span>
-                    {food.delivery_minutes ? `Delivery in ${food.delivery_minutes} min` : "Delivery time to be confirmed"}
-                  </p>
-                  <p>
-                    ★ {food.rating != null
-                      ? <><span className="font-medium text-gray-700">{food.rating.toFixed(1)}</span> <span className="text-gray-400">({food.rating_count ?? 0} ratings)</span></>
-                      : <><span className="font-medium text-gray-700">Not rated yet</span></>}
-                  </p>
-                </div>
-                <p className="text-green-700 font-semibold mt-2">
-                  {food.food_sizes && food.food_sizes.length > 0
-                    ? `From GH₵${Math.min(...food.food_sizes.map((s) => s.price))}`
-                    : `GH₵${food.price}`}
-                </p>
-                <button
-                  onClick={(e) => addToCart(food, e.currentTarget.closest(".rounded-lg"))}
-                  disabled={!food.is_available}
-                  className={`mt-3 w-full py-2 rounded font-medium transition-all duration-200 disabled:cursor-not-allowed ${
-                    justAddedId === food.id
-                      ? "bg-green-900 text-white scale-105"
-                      : food.is_available
-                        ? "bg-green-700 text-white hover:bg-green-800"
-                        : "bg-gray-300 text-gray-600"
-                  }`}
-                >
-                  {food.is_available
-                    ? justAddedId === food.id
-                      ? "Added ✓"
-                      : (food.food_sizes?.length ?? 0) > 0 || (food.food_addons?.length ?? 0) > 0
-                        ? "Choose options"
-                        : "Add to Cart"
-                    : "Unavailable"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openMessageBox(food)}
-                  className="mt-2 w-full rounded border border-green-700 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
-                >
-                  Message seller
-                </button>
+                ))}
               </div>
             </div>
           ))}
@@ -777,14 +805,14 @@ export default function Home() {
 
             {(customizingFood.food_sizes?.length ?? 0) > 0 && (
               <div className="mb-4">
-                <p className="text-sm font-semibold text-gray-800 mb-2">Choose a size</p>
+                <p className="text-sm font-semibold text-gray-900 mb-2">Choose a size</p>
                 <div className="space-y-2">
                   {customizingFood.food_sizes!.map((size) => (
                     <label
                       key={size.id}
                       className="flex items-center justify-between border rounded-lg px-3 py-2 cursor-pointer text-sm"
                     >
-                      <span className="flex items-center gap-2 text-gray-800">
+                      <span className="flex items-center gap-2 font-medium text-gray-900">
                         <input
                           type="radio"
                           name="food-size"
@@ -793,7 +821,7 @@ export default function Home() {
                         />
                         {size.name}
                       </span>
-                      <span className="text-gray-600">GH₵{size.price}</span>
+                      <span className="font-semibold text-gray-800">GH₵{size.price}</span>
                     </label>
                   ))}
                 </div>
@@ -802,14 +830,14 @@ export default function Home() {
 
             {(customizingFood.food_addons?.length ?? 0) > 0 && (
               <div className="mb-4">
-                <p className="text-sm font-semibold text-gray-800 mb-2">Add extras</p>
+                <p className="text-sm font-semibold text-gray-900 mb-2">Add extras</p>
                 <div className="space-y-2">
                   {customizingFood.food_addons!.map((addon) => (
                     <label
                       key={addon.id}
                       className="flex items-center justify-between border rounded-lg px-3 py-2 cursor-pointer text-sm"
                     >
-                      <span className="flex items-center gap-2 text-gray-800">
+                      <span className="flex items-center gap-2 font-medium text-gray-900">
                         <input
                           type="checkbox"
                           checked={modalAddonIds.has(addon.id)}
@@ -820,9 +848,17 @@ export default function Home() {
                             setModalAddonIds(next);
                           }}
                         />
+                        {addon.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={addon.image_url}
+                            alt={addon.name}
+                            className="w-8 h-8 rounded object-cover"
+                          />
+                        ) : null}
                         {addon.name}
                       </span>
-                      <span className="text-gray-600">+GH₵{addon.price}</span>
+                      <span className="font-semibold text-gray-800">+GH₵{addon.price}</span>
                     </label>
                   ))}
                 </div>
