@@ -105,6 +105,8 @@ export default function Home() {
   const [customizingCardEl, setCustomizingCardEl] = useState<HTMLElement | null>(null);
   const [modalSizeId, setModalSizeId] = useState<number | null>(null);
   const [modalAddonIds, setModalAddonIds] = useState<Set<number>>(new Set());
+  const [expandedSellerSlots, setExpandedSellerSlots] = useState<Set<number>>(new Set());
+  const SELLER_SLOT_PREVIEW_COUNT = 6;
   const [messageFood, setMessageFood] = useState<Food | null>(null);
   const [messageText, setMessageText] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -656,107 +658,137 @@ export default function Home() {
         </div>
 
         <div className="space-y-8">
-          {sellerGroups.map(({ sellerId, sellerName, foods: sellerFoods }) => (
-            <div key={sellerId} className="rounded-2xl bg-white/95 p-4 sm:p-5 shadow">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-gray-900">{sellerName}</h2>
-                <span className="text-xs font-medium text-gray-500">
-                  {sellerFoods.length} item{sellerFoods.length !== 1 ? "s" : ""}
-                </span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {sellerFoods.map((food) => (
-                  <div
-                    key={food.id}
-                    className={`food-card-hover bg-white rounded-lg shadow overflow-hidden border border-gray-200 ${
-                      food.is_available ? "" : "opacity-80"
-                    }`}
-                  >
-                    {food.image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={food.image_url}
-                        alt={food.name}
-                        className="w-full h-40 object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-40 bg-gray-100 flex items-center justify-center text-gray-500 text-sm">
-                        No photo
-                      </div>
-                    )}
-                    <div className="p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 className="font-bold text-lg text-gray-900">{food.name}</h3>
-                          <p className="text-gray-700 text-sm">
-                            {food.sellers?.business_name ?? "Unknown seller"}
+          {sellerGroups.map(({ sellerId, sellerName, foods: sellerFoods }) => {
+            const isExpanded = expandedSellerSlots.has(sellerId);
+            const visibleFoods =
+              isExpanded || sellerFoods.length <= SELLER_SLOT_PREVIEW_COUNT
+                ? sellerFoods
+                : sellerFoods.slice(0, SELLER_SLOT_PREVIEW_COUNT);
+
+            return (
+              <div
+                key={sellerId}
+                className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 p-4 sm:p-5 shadow-lg"
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-lg font-bold text-white drop-shadow">{sellerName}</h2>
+                  <span className="text-xs font-medium text-white/80">
+                    {sellerFoods.length} item{sellerFoods.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 items-stretch">
+                  {visibleFoods.map((food) => (
+                    <div
+                      key={food.id}
+                      className={`food-card-hover h-full flex flex-col bg-white rounded-lg shadow overflow-hidden border border-gray-200 ${
+                        food.is_available ? "" : "opacity-80"
+                      }`}
+                    >
+                      {food.image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={food.image_url}
+                          alt={food.name}
+                          className="w-full h-40 object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-40 bg-gray-100 flex items-center justify-center text-gray-500 text-sm">
+                          No photo
+                        </div>
+                      )}
+                      <div className="p-4 flex flex-col flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h3 className="font-bold text-lg text-gray-900">{food.name}</h3>
+                            <p className="text-gray-700 text-sm">
+                              {food.sellers?.business_name ?? "Unknown seller"}
+                            </p>
+                          </div>
+                          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            food.is_available
+                              ? "bg-green-100 text-green-800"
+                              : "bg-gray-200 text-gray-700"
+                          }`}>
+                            {food.is_available ? "Available now" : "Sold out"}
+                          </span>
+                        </div>
+                        <div className="mt-3 space-y-1.5 text-xs text-gray-600">
+                          <p>📍 {food.sellers?.location ?? "On campus"} <span className="text-gray-400">· nearby</span></p>
+                          {food.sellers?.phone_number && (
+                            <p>📞 <a href={`tel:${food.sellers.phone_number}`} className="font-medium text-green-700 hover:underline">{food.sellers.phone_number}</a></p>
+                          )}
+                          <p>🟢 {food.sellers?.open_at && food.sellers?.close_at
+                            ? `Open ${food.sellers.open_at} – ${food.sellers.close_at}`
+                            : "Opening hours to be confirmed"}
+                          </p>
+                          <p>
+                            🕒 {food.pickup_minutes ? `Pickup in ${food.pickup_minutes} min` : "Pickup time to be confirmed"}
+                            <span className="text-gray-400"> · </span>
+                            {food.delivery_minutes ? `Delivery in ${food.delivery_minutes} min` : "Delivery time to be confirmed"}
+                          </p>
+                          <p>
+                            ★ {food.rating != null
+                              ? <><span className="font-medium text-gray-700">{food.rating.toFixed(1)}</span> <span className="text-gray-400">({food.rating_count ?? 0} ratings)</span></>
+                              : <><span className="font-medium text-gray-700">Not rated yet</span></>}
                           </p>
                         </div>
-                        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                          food.is_available
-                            ? "bg-green-100 text-green-800"
-                            : "bg-gray-200 text-gray-700"
-                        }`}>
-                          {food.is_available ? "Available now" : "Sold out"}
-                        </span>
+                        <div className="mt-auto pt-2">
+                          <p className="text-green-700 font-semibold">
+                            {food.food_sizes && food.food_sizes.length > 0
+                              ? `From GH₵${Math.min(...food.food_sizes.map((s) => s.price))}`
+                              : `GH₵${food.price}`}
+                          </p>
+                          <button
+                            onClick={(e) => addToCart(food, e.currentTarget.closest(".rounded-lg"))}
+                            disabled={!food.is_available}
+                            className={`mt-3 w-full py-2 rounded font-medium transition-all duration-200 disabled:cursor-not-allowed ${
+                              justAddedId === food.id
+                                ? "bg-green-900 text-white scale-105"
+                                : food.is_available
+                                  ? "bg-green-700 text-white hover:bg-green-800"
+                                  : "bg-gray-300 text-gray-600"
+                            }`}
+                          >
+                            {food.is_available
+                              ? justAddedId === food.id
+                                ? "Added ✓"
+                                : (food.food_sizes?.length ?? 0) > 0 || (food.food_addons?.length ?? 0) > 0
+                                  ? "Choose options"
+                                  : "Add to Cart"
+                              : "Unavailable"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openMessageBox(food)}
+                            className="mt-2 w-full rounded border border-green-700 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
+                          >
+                            Message seller
+                          </button>
+                        </div>
                       </div>
-                      <div className="mt-3 space-y-1.5 text-xs text-gray-600">
-                        <p>📍 {food.sellers?.location ?? "On campus"} <span className="text-gray-400">· nearby</span></p>
-                        {food.sellers?.phone_number && (
-                          <p>📞 <a href={`tel:${food.sellers.phone_number}`} className="font-medium text-green-700 hover:underline">{food.sellers.phone_number}</a></p>
-                        )}
-                        <p>🟢 {food.sellers?.open_at && food.sellers?.close_at
-                          ? `Open ${food.sellers.open_at} – ${food.sellers.close_at}`
-                          : "Opening hours to be confirmed"}
-                        </p>
-                        <p>
-                          🕒 {food.pickup_minutes ? `Pickup in ${food.pickup_minutes} min` : "Pickup time to be confirmed"}
-                          <span className="text-gray-400"> · </span>
-                          {food.delivery_minutes ? `Delivery in ${food.delivery_minutes} min` : "Delivery time to be confirmed"}
-                        </p>
-                        <p>
-                          ★ {food.rating != null
-                            ? <><span className="font-medium text-gray-700">{food.rating.toFixed(1)}</span> <span className="text-gray-400">({food.rating_count ?? 0} ratings)</span></>
-                            : <><span className="font-medium text-gray-700">Not rated yet</span></>}
-                        </p>
-                      </div>
-                      <p className="text-green-700 font-semibold mt-2">
-                        {food.food_sizes && food.food_sizes.length > 0
-                          ? `From GH₵${Math.min(...food.food_sizes.map((s) => s.price))}`
-                          : `GH₵${food.price}`}
-                      </p>
-                      <button
-                        onClick={(e) => addToCart(food, e.currentTarget.closest(".rounded-lg"))}
-                        disabled={!food.is_available}
-                        className={`mt-3 w-full py-2 rounded font-medium transition-all duration-200 disabled:cursor-not-allowed ${
-                          justAddedId === food.id
-                            ? "bg-green-900 text-white scale-105"
-                            : food.is_available
-                              ? "bg-green-700 text-white hover:bg-green-800"
-                              : "bg-gray-300 text-gray-600"
-                        }`}
-                      >
-                        {food.is_available
-                          ? justAddedId === food.id
-                            ? "Added ✓"
-                            : (food.food_sizes?.length ?? 0) > 0 || (food.food_addons?.length ?? 0) > 0
-                              ? "Choose options"
-                              : "Add to Cart"
-                          : "Unavailable"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openMessageBox(food)}
-                        className="mt-2 w-full rounded border border-green-700 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
-                      >
-                        Message seller
-                      </button>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+                {sellerFoods.length > SELLER_SLOT_PREVIEW_COUNT && (
+                  <button
+                    onClick={() =>
+                      setExpandedSellerSlots((prev) => {
+                        const next = new Set(prev);
+                        if (isExpanded) next.delete(sellerId);
+                        else next.add(sellerId);
+                        return next;
+                      })
+                    }
+                    className="mt-4 w-full rounded-lg border border-white/30 py-2 text-sm font-semibold text-white hover:bg-white/10"
+                  >
+                    {isExpanded
+                      ? "Show fewer items"
+                      : `See all ${sellerFoods.length} items`}
+                  </button>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
