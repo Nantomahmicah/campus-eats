@@ -360,7 +360,7 @@ export default function Home() {
         className="fixed inset-0 -z-10 bg-cover bg-center bg-fixed blur-sm scale-105"
         style={{
           backgroundImage:
-            "linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url('https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1600&q=80')",
+            "linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.55)), url('market-bg.jpg/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1600&q=80')",
         }}
       />
 
