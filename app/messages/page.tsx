@@ -31,7 +31,7 @@ export default function Messages() {
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<Message[]>([]);
   const [sellerNames, setSellerNames] = useState<Record<string, string>>({});
-  const [myDisplayName, setMyDisplayName] = useState("Campus Eats user");
+  const [myDisplayName, setMyDisplayName] = useState("Campus Mall user");
   const [selectedOtherId, setSelectedOtherId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
@@ -58,7 +58,7 @@ export default function Messages() {
         sellerRow?.business_name ??
           data.user.user_metadata?.buyer_name ??
           data.user.email ??
-          "Campus Eats user"
+          "Campus Mall user"
       );
 
       // Map of every seller's user_id -> business name, for labeling conversations
@@ -125,7 +125,7 @@ export default function Messages() {
       ).length;
 
       const theirMessage = [...sorted].reverse().find((m) => m.sender_id === otherId);
-      const otherName = sellerNames[otherId] ?? theirMessage?.sender_name ?? "Campus Eats user";
+      const otherName = sellerNames[otherId] ?? theirMessage?.sender_name ?? "Campus Mall user";
 
       result.push({ otherId, otherName, lastMessage, unreadCount });
     });
@@ -220,7 +220,7 @@ export default function Messages() {
             href="/"
             className="rounded-full bg-green-100 px-3 py-2 text-sm font-semibold text-green-800 transition hover:bg-green-200"
           >
-            Back to Campus Eats
+            Back to Campus Mall
           </Link>
         </div>
 

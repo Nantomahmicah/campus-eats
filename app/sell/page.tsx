@@ -5,6 +5,20 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../Lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
+const CATEGORIES = [
+  "Food & Drinks",
+  "Electronics & Phones",
+  "Fashion & Clothing",
+  "Books & Stationery",
+  "Beauty & Personal Care",
+  "Room & Hostel Items",
+  "Services",
+  "Other",
+];
+
+// Categories where "New / Used" doesn't make sense
+const NO_CONDITION_CATEGORIES = ["Food & Drinks", "Services"];
+
 export default function Sell() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -13,7 +27,10 @@ export default function Sell() {
   const [businessName, setBusinessName] = useState("");
   const [phone, setPhone] = useState("");
   const [location, setLocation] = useState("");
-  const [foodName, setFoodName] = useState("");
+  const [itemName, setItemName] = useState("");
+  const [category, setCategory] = useState("");
+  const [condition, setCondition] = useState("");
+  const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [pickupMinutes, setPickupMinutes] = useState("");
   const [deliveryMinutes, setDeliveryMinutes] = useState("");
@@ -22,6 +39,8 @@ export default function Sell() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+
+  const showCondition = category !== "" && !NO_CONDITION_CATEGORIES.includes(category);
 
   useEffect(() => {
     async function checkUser() {
@@ -52,6 +71,7 @@ export default function Sell() {
     if (!user) return;
     setSubmitting(true);
     setErrorMsg("");
+    setSuccess(false);
 
     try {
       let sellerId: number;
@@ -98,22 +118,27 @@ export default function Sell() {
         imageUrl = publicUrlData.publicUrl;
       }
 
-      const { error: foodError } = await supabase.from("Foods").insert({
-        name: foodName,
+      const { error: itemError } = await supabase.from("Foods").insert({
+        name: itemName,
         price: Number(price),
         seller_id: sellerId,
         image_url: imageUrl,
         pickup_minutes: Number(pickupMinutes),
         delivery_minutes: Number(deliveryMinutes),
+        category,
+        description: description.trim() || null,
+        condition: showCondition ? condition : null,
       });
 
-      if (foodError) throw foodError;
+      if (itemError) throw itemError;
 
       setSuccess(true);
-      setFoodName("");
+      setItemName("");
       setPrice("");
       setPickupMinutes("");
       setDeliveryMinutes("");
+      setDescription("");
+      setCondition("");
       setImageFile(null);
       setImagePreview(null);
     } catch (err: unknown) {
@@ -149,13 +174,13 @@ export default function Sell() {
             <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-xl">
               🛒
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">Sell on Campus Eats</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Sell on Campus Mall</h1>
           </div>
           <p className="text-gray-600 mb-6 text-sm">Logged in as {user?.email}</p>
 
           {success && (
             <div className="bg-green-50 text-green-800 p-3 rounded-lg mb-4 text-sm border border-green-100">
-              ✅ Food item added! Check the homepage.
+              ✅ Listing added! Check the homepage.
             </div>
           )}
           {errorMsg && (
@@ -166,13 +191,13 @@ export default function Sell() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1 text-gray-700">Business name</label>
+              <label className="block text-sm font-medium mb-1 text-gray-700">Shop / seller name</label>
               <input
                 required
                 value={businessName}
                 onChange={(e) => setBusinessName(e.target.value)}
                 className="market-input w-full"
-                placeholder="e.g. Auntie Ama's Kitchen"
+                placeholder="e.g. Kwame's Gadgets"
               />
             </div>
 
@@ -200,13 +225,67 @@ export default function Sell() {
             <hr className="border-gray-200" />
 
             <div>
-              <label className="block text-sm font-medium mb-1 text-gray-700">Food name</label>
+              <label className="block text-sm font-medium mb-1 text-gray-700">Item name</label>
               <input
                 required
-                value={foodName}
-                onChange={(e) => setFoodName(e.target.value)}
+                value={itemName}
+                onChange={(e) => setItemName(e.target.value)}
                 className="market-input w-full"
-                placeholder="e.g. Jollof Rice & Chicken"
+                placeholder="e.g. Jollof rice, iPhone 11, Statistics textbook"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1 text-gray-700">Category</label>
+              <select
+                required
+                value={category}
+                onChange={(e) => {
+                  setCategory(e.target.value);
+                  if (NO_CONDITION_CATEGORIES.includes(e.target.value)) setCondition("");
+                }}
+                className="market-input w-full"
+              >
+                <option value="" disabled>
+                  Choose a category
+                </option>
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {showCondition && (
+              <div>
+                <label className="block text-sm font-medium mb-1 text-gray-700">Condition</label>
+                <select
+                  required
+                  value={condition}
+                  onChange={(e) => setCondition(e.target.value)}
+                  className="market-input w-full"
+                >
+                  <option value="" disabled>
+                    New or used?
+                  </option>
+                  <option value="New">New</option>
+                  <option value="Used">Used</option>
+                </select>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium mb-1 text-gray-700">
+                Description <span className="font-normal text-gray-400">(optional)</span>
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                maxLength={500}
+                rows={3}
+                className="market-input w-full"
+                placeholder="e.g. 64GB, battery health 87%, comes with charger"
               />
             </div>
 
@@ -224,7 +303,7 @@ export default function Sell() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700">Pickup time (minutes)</label>
+                <label className="block text-sm font-medium mb-1 text-gray-700">Ready for pickup in (min)</label>
                 <input
                   required
                   min="0"
@@ -236,7 +315,7 @@ export default function Sell() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-gray-700">Delivery time (minutes)</label>
+                <label className="block text-sm font-medium mb-1 text-gray-700">Delivery time (min)</label>
                 <input
                   required
                   min="0"
@@ -284,12 +363,17 @@ export default function Sell() {
               )}
             </div>
 
+            <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800 border border-amber-100">
+              Not allowed: weapons, illegal drugs, stolen or counterfeit goods, or anything else
+              illegal. Listings that break these rules will be removed.
+            </p>
+
             <button
               type="submit"
               disabled={submitting}
               className="market-button w-full py-2.5 disabled:opacity-50"
             >
-              {submitting ? "Adding..." : "Add Food Item"}
+              {submitting ? "Adding..." : "Add Listing"}
             </button>
           </form>
         </div>

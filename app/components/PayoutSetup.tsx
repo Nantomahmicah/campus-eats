@@ -162,7 +162,7 @@ export default function PayoutSetup({
               ✅ Set up — {currentPayoutMethod === "bank" ? "Bank" : "MoMo"} · {currentAccountName}
             </p>
             <p className="text-xs text-gray-500 mt-0.5">
-              You automatically receive 95% of each order; Campus Eats keeps 5%.
+              You automatically receive 95% of each order; Campus Mall keeps 5%.
             </p>
           </div>
           <button
@@ -180,7 +180,7 @@ export default function PayoutSetup({
     <div className="bg-white rounded-lg shadow p-4 space-y-3">
       <h2 className="font-bold text-gray-900">Set up payouts</h2>
       <p className="text-xs text-gray-500">
-        You&apos;ll receive 95% of each order directly. Campus Eats keeps 5%.
+        You&apos;ll receive 95% of each order directly. Campus Mall keeps 5%.
       </p>
       <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-2">
         Heads up: your very first payout can take a little longer while Paystack verifies your

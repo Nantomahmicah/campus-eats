@@ -278,7 +278,7 @@ export default function MyOrders() {
               href="/"
               className="rounded-full bg-green-100 px-3 py-2 text-sm font-semibold text-green-800 transition hover:bg-green-200"
             >
-              Back to Campus Eats
+              Back to Campus Mall
             </Link>
           </div>
         </div>

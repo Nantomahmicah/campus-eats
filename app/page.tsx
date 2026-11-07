@@ -1,11 +1,20 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { supabase } from "./Lib/supabase";
 import type { User } from "@supabase/supabase-js";
 
-type FoodOption = { id: number; name: string; price: number; image_url?: string | null };
+const CATEGORIES = [
+  "Food & Drinks",
+  "Electronics & Phones",
+  "Fashion & Clothing",
+  "Books & Stationery",
+  "Beauty & Personal Care",
+  "Room & Hostel Items",
+  "Services",
+  "Other",
+];
 
 type Food = {
   id: number;
@@ -18,6 +27,9 @@ type Food = {
   delivery_minutes: number | null;
   rating: number | null;
   rating_count: number | null;
+  category: string | null;
+  description: string | null;
+  condition: string | null;
   sellers: {
     business_name: string;
     user_id: string;
@@ -25,21 +37,7 @@ type Food = {
     phone_number: string | null;
     open_at: string | null;
     close_at: string | null;
-    paystack_subaccount_code: string | null;
   } | null;
-  food_sizes?: FoodOption[];
-  food_addons?: FoodOption[];
-  // Set only on items sitting in the cart, once a size/add-on was chosen
-  cartUnitPrice?: number;
-  cartLabel?: string;
-  selectedSizeName?: string;
-  selectedAddonNames?: string[];
-};
-
-type PaystackSplit = {
-  type: "flat" | "percentage";
-  bearer_type: "account" | "all" | "all-proportional" | "subaccount";
-  subaccounts: { subaccount: string; share: number }[];
 };
 
 type PaystackConfig = {
@@ -48,7 +46,6 @@ type PaystackConfig = {
   amount: number;
   currency: string;
   channels?: string[];
-  split?: PaystackSplit;
   callback: (response: { reference: string }) => void;
   onClose: () => void;
 };
@@ -95,18 +92,7 @@ export default function Home() {
   const [justAddedId, setJustAddedId] = useState<number | null>(null);
   const [cartBounce, setCartBounce] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [pastOrderFoodIds, setPastOrderFoodIds] = useState<Set<number>>(new Set());
-  const [usualFood, setUsualFood] = useState<Food | null>(null);
-  const [showWelcomeBack, setShowWelcomeBack] = useState(false);
-  const [quickFilter, setQuickFilter] = useState<"all" | "new" | "cheap" | "top-rated" | "available">(
-    "all"
-  );
-  const [customizingFood, setCustomizingFood] = useState<Food | null>(null);
-  const [customizingCardEl, setCustomizingCardEl] = useState<HTMLElement | null>(null);
-  const [modalSizeId, setModalSizeId] = useState<number | null>(null);
-  const [modalAddonIds, setModalAddonIds] = useState<Set<number>>(new Set());
-  const [expandedSellerSlots, setExpandedSellerSlots] = useState<Set<number>>(new Set());
-  const SELLER_SLOT_PREVIEW_COUNT = 6;
+  const [selectedCategory, setSelectedCategory] = useState("All");
   const [messageFood, setMessageFood] = useState<Food | null>(null);
   const [messageText, setMessageText] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -130,37 +116,12 @@ export default function Home() {
 
       const { data, error } = await supabase
         .from("Foods")
-        .select("id, name, price, seller_id, image_url, is_available, pickup_minutes, delivery_minutes, rating, rating_count, sellers(business_name, user_id, location, phone_number, open_at, close_at, paystack_subaccount_code), food_sizes(id, name, price), food_addons(id, name, price, image_url)");
+        .select("id, name, price, seller_id, image_url, is_available, pickup_minutes, delivery_minutes, rating, rating_count, category, description, condition, sellers(business_name, user_id, location, phone_number, open_at, close_at)");
 
       if (error) {
-        console.error("Error loading foods:", error);
+        console.error("Error loading listings:", error);
       } else {
-        const loadedFoods = data as unknown as Food[];
-        setFoods(loadedFoods);
-
-        if (userData.user) {
-          const { data: pastOrders } = await supabase
-            .from("order_items")
-            .select("food_id")
-            .eq("order_user_id", userData.user.id);
-
-          if (pastOrders && pastOrders.length > 0) {
-            const idSet = new Set<number>(pastOrders.map((o: { food_id: number }) => o.food_id));
-            setPastOrderFoodIds(idSet);
-
-            const counts = new Map<number, number>();
-            for (const o of pastOrders as { food_id: number }[]) {
-              counts.set(o.food_id, (counts.get(o.food_id) ?? 0) + 1);
-            }
-            const mostOrderedId = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-            const usual = loadedFoods.find((f) => f.id === mostOrderedId && f.is_available) ?? null;
-
-            if (usual) {
-              setUsualFood(usual);
-              setShowWelcomeBack(true);
-            }
-          }
-        }
+        setFoods(data as unknown as Food[]);
       }
       setLoading(false);
     }
@@ -202,8 +163,6 @@ export default function Home() {
       sender_id: user.id,
       recipient_id: messageFood.sellers.user_id,
       food_id: messageFood.id,
-      food_name: messageFood.name,
-      sender_name: user.user_metadata?.buyer_name ?? user.email ?? "A buyer",
       body: messageText.trim(),
     });
 
@@ -212,7 +171,6 @@ export default function Home() {
     } else {
       setMessageFood(null);
       setMessageText("");
-      window.location.href = "/messages";
     }
     setSendingMessage(false);
   }
@@ -256,16 +214,6 @@ export default function Home() {
   }
 
   function addToCart(food: Food, cardEl: HTMLElement | null) {
-    const hasOptions = (food.food_sizes?.length ?? 0) > 0 || (food.food_addons?.length ?? 0) > 0;
-
-    if (hasOptions) {
-      setCustomizingFood(food);
-      setCustomizingCardEl(cardEl);
-      setModalSizeId(food.food_sizes?.[0]?.id ?? null);
-      setModalAddonIds(new Set());
-      return;
-    }
-
     setCart([...cart, food]);
     setJustAddedId(food.id);
     setTimeout(() => setJustAddedId(null), 700);
@@ -274,41 +222,13 @@ export default function Home() {
     flyToCart(imageEl);
   }
 
-  function confirmCustomizedAddToCart() {
-    if (!customizingFood) return;
-    const food = customizingFood;
-
-    const chosenSize = food.food_sizes?.find((s) => s.id === modalSizeId) ?? null;
-    const chosenAddons = (food.food_addons ?? []).filter((a) => modalAddonIds.has(a.id));
-
-    const unitPrice = (chosenSize?.price ?? food.price) + chosenAddons.reduce((sum, a) => sum + a.price, 0);
-    const labelParts = [
-      chosenSize ? chosenSize.name : null,
-      ...chosenAddons.map((a) => `+ ${a.name}`),
-    ].filter(Boolean);
-    const label = labelParts.length > 0 ? `${food.name} (${labelParts.join(", ")})` : food.name;
-
-    const cartItem: Food = {
-      ...food,
-      cartUnitPrice: unitPrice,
-      cartLabel: label,
-      selectedSizeName: chosenSize?.name,
-      selectedAddonNames: chosenAddons.map((a) => a.name),
-    };
-
-    setCart([...cart, cartItem]);
-    setJustAddedId(food.id);
-    setTimeout(() => setJustAddedId(null), 700);
-
-    const imageEl = customizingCardEl?.querySelector("img") as HTMLImageElement | null;
-    flyToCart(imageEl);
-
-    setCustomizingFood(null);
-    setCustomizingCardEl(null);
-  }
-
   function removeFromCart(index: number) {
     setCart(cart.filter((_, i) => i !== index));
+  }
+
+  function pickCategory(category: string) {
+    setSelectedCategory(category);
+    document.getElementById("available-now")?.scrollIntoView({ behavior: "smooth" });
   }
 
   async function subscribeNewsletter(e: React.FormEvent) {
@@ -340,8 +260,8 @@ export default function Home() {
 
     const rows = cart.map((item) => ({
       food_id: item.id,
-      food_name: item.cartLabel ?? item.name,
-      price: item.cartUnitPrice ?? item.price,
+      food_name: item.name,
+      price: item.price,
       seller_id: item.seller_id,
       buyer_name: buyerName,
       buyer_phone: buyerPhone,
@@ -350,8 +270,6 @@ export default function Home() {
       delivery_location: fulfillmentMethod === "delivery" ? deliveryLocation.trim() : null,
       order_note: orderNote.trim() || null,
       order_user_id: user?.id ?? null,
-      selected_size: item.selectedSizeName ?? null,
-      selected_addons: item.selectedAddonNames?.length ? item.selectedAddonNames.join(", ") : null,
     }));
 
     if (payment === "cash") {
@@ -378,29 +296,7 @@ export default function Home() {
     try {
       await ensurePaystackScript();
       const PaystackPop = (window as unknown as { PaystackPop: PaystackPopType }).PaystackPop;
-      const emailForPaystack = user?.email ?? `${buyerPhone.replace(/\D/g, "")}@campuseats.local`;
-
-      // Split the payment so each seller automatically receives 95% of their
-      // own items' value, and Campus Eats keeps 5% — even when a cart mixes
-      // items from several sellers in one checkout.
-      const subtotalsBySeller = new Map<string, number>();
-      for (const item of cart) {
-        const code = item.sellers?.paystack_subaccount_code;
-        if (!code) continue; // seller hasn't set up payouts yet — their share stays with the platform for now
-        subtotalsBySeller.set(code, (subtotalsBySeller.get(code) ?? 0) + (item.cartUnitPrice ?? item.price));
-      }
-
-      let split: PaystackSplit | undefined;
-      if (subtotalsBySeller.size > 0) {
-        split = {
-          type: "flat",
-          bearer_type: "account",
-          subaccounts: Array.from(subtotalsBySeller.entries()).map(([subaccount, subtotal]) => ({
-            subaccount,
-            share: Math.round(subtotal * 0.95 * 100), // 95% of this seller's subtotal, in pesewas
-          })),
-        };
-      }
+      const emailForPaystack = user?.email ?? `${buyerPhone.replace(/\D/g, "")}@campusmall.local`;
 
       const handler = PaystackPop.setup({
         key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY!,
@@ -408,7 +304,6 @@ export default function Home() {
         amount: Math.round(total * 100),
         currency: "GHS",
         channels: payment === "momo" ? ["mobile_money"] : ["card"],
-        ...(split ? { split } : {}),
         callback: (response) => {
           (async () => {
             try {
@@ -445,38 +340,19 @@ export default function Home() {
     }
   }
 
-  const total = cart.reduce((sum, item) => sum + (item.cartUnitPrice ?? item.price), 0);
+  const total = cart.reduce((sum, item) => sum + item.price, 0);
   const checkoutReady = payment && buyerName && buyerPhone && (fulfillmentMethod === "pickup" || deliveryLocation.trim());
   const filteredFoods = foods.filter((food) => {
     const query = searchQuery.trim().toLowerCase();
-    const matchesQuery =
+    const itemCategory = food.category ?? "Other";
+    const matchesCategory = selectedCategory === "All" || itemCategory === selectedCategory;
+    const matchesSearch =
       !query ||
       food.name.toLowerCase().includes(query) ||
-      food.sellers?.business_name?.toLowerCase().includes(query);
-    if (!matchesQuery) return false;
-
-    if (quickFilter === "new") return !pastOrderFoodIds.has(food.id);
-    if (quickFilter === "cheap") return food.price <= 10;
-    if (quickFilter === "top-rated") return (food.rating ?? 0) >= 4;
-    if (quickFilter === "available") return food.is_available;
-    return true;
+      food.sellers?.business_name?.toLowerCase().includes(query) ||
+      itemCategory.toLowerCase().includes(query);
+    return matchesCategory && matchesSearch;
   });
-
-  // Group foods by seller so each seller's products sit together as one
-  // market slot on the page, instead of a single mixed grid.
-  const sellerGroups = useMemo(() => {
-    const map = new Map<number, { sellerId: number; sellerName: string; foods: Food[] }>();
-    for (const food of filteredFoods) {
-      const sellerId = food.seller_id;
-      const sellerName = food.sellers?.business_name ?? "Unknown seller";
-      if (!map.has(sellerId)) {
-        map.set(sellerId, { sellerId, sellerName, foods: [] });
-      }
-      map.get(sellerId)!.foods.push(food);
-    }
-    return Array.from(map.values()).sort((a, b) => a.sellerName.localeCompare(b.sellerName));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredFoods]);
 
   return (
     <main className="min-h-screen pb-32 relative">
@@ -491,7 +367,7 @@ export default function Home() {
       <header className="sticky top-0 z-40 bg-green-700 text-white shadow-md">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-4 sm:gap-x-6 sm:px-6">
           <Link href="/" className="shrink-0">
-            <h1 className="text-2xl font-bold leading-none">Campus Eats</h1>
+            <h1 className="text-2xl font-bold leading-none">Campus Mall</h1>
             <p className="mt-1 text-xs text-green-100">Made by students, for students</p>
           </Link>
 
@@ -501,8 +377,8 @@ export default function Home() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-transparent text-sm outline-none placeholder:text-gray-400"
-              placeholder="Search food or sellers"
-              aria-label="Search food or sellers"
+              placeholder="Search items or sellers"
+              aria-label="Search items or sellers"
             />
           </label>
 
@@ -588,207 +464,139 @@ export default function Home() {
 
       <section id="available-now" className="p-6 scroll-mt-36">
         <div className="mb-5 max-w-2xl text-white drop-shadow">
-          <p className="text-sm font-semibold uppercase tracking-wider text-green-100">Eat local. Support campus.</p>
-          <h2 className="mt-1 text-2xl font-bold sm:text-3xl">Fresh food from students near you</h2>
-          <p className="mt-1 text-green-50">Find a quick pickup, or arrange delivery straight from campus sellers.</p>
+          <p className="text-sm font-semibold uppercase tracking-wider text-green-100">Buy. Sell. Campus.</p>
+          <h2 className="mt-1 text-2xl font-bold sm:text-3xl">Everything you need, from students on campus</h2>
+          <p className="mt-1 text-green-50">Find great deals, pick up fast, or arrange delivery straight from campus sellers.</p>
         </div>
 
-        {loading && <p className="text-gray-100">Loading food...</p>}
-        {!loading && foods.length === 0 && (
-          <p className="text-gray-100">No food items found yet.</p>
-        )}
-        {!loading && foods.length > 0 && filteredFoods.length === 0 && (
-          <p className="text-gray-100">No food or sellers match &ldquo;{searchQuery}&rdquo;.</p>
-        )}
-
-        {showWelcomeBack && usualFood && (
-          <div className="mb-4 flex flex-col gap-3 rounded-2xl bg-white/95 p-4 shadow sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-bold text-gray-900">Welcome back! 👋</p>
-              <p className="text-sm text-gray-600">
-                Fancy your usual — <span className="font-semibold">{usualFood.name}</span> (GH₵
-                {usualFood.price}) from {usualFood.sellers?.business_name}?
-              </p>
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <button
-                onClick={(e) => {
-                  addToCart(usualFood, e.currentTarget);
-                  setShowWelcomeBack(false);
-                }}
-                className="rounded-full bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
-              >
-                Order my usual
-              </button>
-              <button
-                onClick={() => {
-                  setQuickFilter("new");
-                  setShowWelcomeBack(false);
-                }}
-                className="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200"
-              >
-                Something new today
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="mb-4 flex flex-wrap gap-2">
-          {(
-            [
-              { key: "all", label: "All" },
-              { key: "new", label: "🆕 New to me" },
-              { key: "cheap", label: "💸 Under GH₵10" },
-              { key: "top-rated", label: "⭐ Top rated" },
-              { key: "available", label: "✅ Available now" },
-            ] as const
-          ).map((chip) => (
+        <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
+          {["All", ...CATEGORIES].map((c) => (
             <button
-              key={chip.key}
-              onClick={() => setQuickFilter(chip.key)}
-              className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
-                quickFilter === chip.key
-                  ? "bg-green-600 text-white"
-                  : "bg-white/90 text-gray-700 hover:bg-white"
+              key={c}
+              onClick={() => setSelectedCategory(c)}
+              className={`shrink-0 whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                selectedCategory === c
+                  ? "bg-white text-green-800 shadow"
+                  : "bg-white/20 text-white hover:bg-white/30"
               }`}
             >
-              {chip.label}
+              {c}
             </button>
           ))}
         </div>
 
-        <div className="space-y-8">
-          {sellerGroups.map(({ sellerId, sellerName, foods: sellerFoods }) => {
-            const isExpanded = expandedSellerSlots.has(sellerId);
-            const visibleFoods =
-              isExpanded || sellerFoods.length <= SELLER_SLOT_PREVIEW_COUNT
-                ? sellerFoods
-                : sellerFoods.slice(0, SELLER_SLOT_PREVIEW_COUNT);
+        {loading && <p className="text-gray-100">Loading listings...</p>}
+        {!loading && foods.length === 0 && (
+          <p className="text-gray-100">No listings yet.</p>
+        )}
+        {!loading && foods.length > 0 && filteredFoods.length === 0 && (
+          <p className="text-gray-100">
+            No items match your search or category. Try &ldquo;All&rdquo; or a different word.
+          </p>
+        )}
 
-            return (
-              <div
-                key={sellerId}
-                className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 p-4 sm:p-5 shadow-lg"
-              >
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-lg font-bold text-white drop-shadow">{sellerName}</h2>
-                  <span className="text-xs font-medium text-white/80">
-                    {sellerFoods.length} item{sellerFoods.length !== 1 ? "s" : ""}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          {filteredFoods.map((food) => (
+            <div
+              key={food.id}
+              className={`food-card-hover bg-white rounded-lg shadow overflow-hidden border border-gray-200 ${
+                food.is_available ? "" : "opacity-80"
+              }`}
+            >
+              {food.image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={food.image_url}
+                  alt={food.name}
+                  className="w-full h-40 object-cover"
+                />
+              ) : (
+                <div className="w-full h-40 bg-gray-100 flex items-center justify-center text-gray-500 text-sm">
+                  No photo
+                </div>
+              )}
+              <div className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-bold text-lg text-gray-900">{food.name}</h3>
+                    <p className="text-gray-700 text-sm">
+                      {food.sellers?.business_name ?? "Unknown seller"}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    food.is_available
+                      ? "bg-green-100 text-green-800"
+                      : "bg-gray-200 text-gray-700"
+                  }`}>
+                    {food.is_available ? "Available now" : "Sold out"}
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 items-stretch">
-                  {visibleFoods.map((food) => (
-                    <div
-                      key={food.id}
-                      className={`food-card-hover h-full flex flex-col bg-white rounded-lg shadow overflow-hidden border border-gray-200 ${
-                        food.is_available ? "" : "opacity-80"
+
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-800">
+                    {food.category ?? "Other"}
+                  </span>
+                  {food.condition && (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        food.condition === "New"
+                          ? "bg-blue-50 text-blue-800"
+                          : "bg-amber-50 text-amber-800"
                       }`}
                     >
-                      {food.image_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={food.image_url}
-                          alt={food.name}
-                          className="w-full h-40 object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-40 bg-gray-100 flex items-center justify-center text-gray-500 text-sm">
-                          No photo
-                        </div>
-                      )}
-                      <div className="p-4 flex flex-col flex-1">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <h3 className="font-bold text-lg text-gray-900">{food.name}</h3>
-                            <p className="text-gray-700 text-sm">
-                              {food.sellers?.business_name ?? "Unknown seller"}
-                            </p>
-                          </div>
-                          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                            food.is_available
-                              ? "bg-green-100 text-green-800"
-                              : "bg-gray-200 text-gray-700"
-                          }`}>
-                            {food.is_available ? "Available now" : "Sold out"}
-                          </span>
-                        </div>
-                        <div className="mt-3 space-y-1.5 text-xs text-gray-600">
-                          <p>📍 {food.sellers?.location ?? "On campus"} <span className="text-gray-400">· nearby</span></p>
-                          {food.sellers?.phone_number && (
-                            <p>📞 <a href={`tel:${food.sellers.phone_number}`} className="font-medium text-green-700 hover:underline">{food.sellers.phone_number}</a></p>
-                          )}
-                          <p>🟢 {food.sellers?.open_at && food.sellers?.close_at
-                            ? `Open ${food.sellers.open_at} – ${food.sellers.close_at}`
-                            : "Opening hours to be confirmed"}
-                          </p>
-                          <p>
-                            🕒 {food.pickup_minutes ? `Pickup in ${food.pickup_minutes} min` : "Pickup time to be confirmed"}
-                            <span className="text-gray-400"> · </span>
-                            {food.delivery_minutes ? `Delivery in ${food.delivery_minutes} min` : "Delivery time to be confirmed"}
-                          </p>
-                          <p>
-                            ★ {food.rating != null
-                              ? <><span className="font-medium text-gray-700">{food.rating.toFixed(1)}</span> <span className="text-gray-400">({food.rating_count ?? 0} ratings)</span></>
-                              : <><span className="font-medium text-gray-700">Not rated yet</span></>}
-                          </p>
-                        </div>
-                        <div className="mt-auto pt-2">
-                          <p className="text-green-700 font-semibold">
-                            {food.food_sizes && food.food_sizes.length > 0
-                              ? `From GH₵${Math.min(...food.food_sizes.map((s) => s.price))}`
-                              : `GH₵${food.price}`}
-                          </p>
-                          <button
-                            onClick={(e) => addToCart(food, e.currentTarget.closest(".rounded-lg"))}
-                            disabled={!food.is_available}
-                            className={`mt-3 w-full py-2 rounded font-medium transition-all duration-200 disabled:cursor-not-allowed ${
-                              justAddedId === food.id
-                                ? "bg-green-900 text-white scale-105"
-                                : food.is_available
-                                  ? "bg-green-700 text-white hover:bg-green-800"
-                                  : "bg-gray-300 text-gray-600"
-                            }`}
-                          >
-                            {food.is_available
-                              ? justAddedId === food.id
-                                ? "Added ✓"
-                                : (food.food_sizes?.length ?? 0) > 0 || (food.food_addons?.length ?? 0) > 0
-                                  ? "Choose options"
-                                  : "Add to Cart"
-                              : "Unavailable"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openMessageBox(food)}
-                            className="mt-2 w-full rounded border border-green-700 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
-                          >
-                            Message seller
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                      {food.condition}
+                    </span>
+                  )}
                 </div>
-                {sellerFoods.length > SELLER_SLOT_PREVIEW_COUNT && (
-                  <button
-                    onClick={() =>
-                      setExpandedSellerSlots((prev) => {
-                        const next = new Set(prev);
-                        if (isExpanded) next.delete(sellerId);
-                        else next.add(sellerId);
-                        return next;
-                      })
-                    }
-                    className="mt-4 w-full rounded-lg border border-white/30 py-2 text-sm font-semibold text-white hover:bg-white/10"
-                  >
-                    {isExpanded
-                      ? "Show fewer items"
-                      : `See all ${sellerFoods.length} items`}
-                  </button>
+
+                {food.description && (
+                  <p className="mt-2 line-clamp-2 text-sm text-gray-600">{food.description}</p>
                 )}
+
+                <div className="mt-3 space-y-1.5 text-xs text-gray-600">
+                  <p>📍 {food.sellers?.location ?? "On campus"} <span className="text-gray-400">· nearby</span></p>
+                  {food.sellers?.phone_number && (
+                    <p>📞 <a href={`tel:${food.sellers.phone_number}`} className="font-medium text-green-700 hover:underline">{food.sellers.phone_number}</a></p>
+                  )}
+                  <p>🟢 {food.sellers?.open_at && food.sellers?.close_at
+                    ? `Open ${food.sellers.open_at} – ${food.sellers.close_at}`
+                    : "Opening hours to be confirmed"}
+                  </p>
+                  <p>
+                    🕒 {food.pickup_minutes ? `Pickup in ${food.pickup_minutes} min` : "Pickup time to be confirmed"}
+                    <span className="text-gray-400"> · </span>
+                    {food.delivery_minutes ? `Delivery in ${food.delivery_minutes} min` : "Delivery time to be confirmed"}
+                  </p>
+                  <p>
+                    ★ {food.rating != null
+                      ? <><span className="font-medium text-gray-700">{food.rating.toFixed(1)}</span> <span className="text-gray-400">({food.rating_count ?? 0} ratings)</span></>
+                      : <><span className="font-medium text-gray-700">Not rated yet</span></>}
+                  </p>
+                </div>
+                <p className="text-green-700 font-semibold mt-2">GH₵{food.price}</p>
+                <button
+                  onClick={(e) => addToCart(food, e.currentTarget.closest(".rounded-lg"))}
+                  disabled={!food.is_available}
+                  className={`mt-3 w-full py-2 rounded font-medium transition-all duration-200 disabled:cursor-not-allowed ${
+                    justAddedId === food.id
+                      ? "bg-green-900 text-white scale-105"
+                      : food.is_available
+                        ? "bg-green-700 text-white hover:bg-green-800"
+                        : "bg-gray-300 text-gray-600"
+                  }`}
+                >
+                  {food.is_available ? (justAddedId === food.id ? "Added ✓" : "Add to Cart") : "Unavailable"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openMessageBox(food)}
+                  className="mt-2 w-full rounded border border-green-700 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
+                >
+                  Message seller
+                </button>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       </section>
 
@@ -807,9 +615,9 @@ export default function Home() {
           <div className="max-h-32 overflow-y-auto mb-2">
             {cart.map((item, i) => (
               <div key={i} className="flex justify-between text-sm py-1 text-gray-800">
-                <span>{item.cartLabel ?? item.name}</span>
+                <span>{item.name}</span>
                 <div className="flex items-center gap-3">
-                  <span>GH₵{item.cartUnitPrice ?? item.price}</span>
+                  <span>GH₵{item.price}</span>
                   <button onClick={() => removeFromCart(i)} className="text-red-500 text-xs">
                     remove
                   </button>
@@ -825,107 +633,6 @@ export default function Home() {
             >
               Checkout
             </button>
-          </div>
-        </div>
-      )}
-
-      {customizingFood && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto">
-            <h2 className="text-lg font-bold mb-1 text-gray-900">{customizingFood.name}</h2>
-            <p className="text-sm text-gray-500 mb-4">Customize your order</p>
-
-            {(customizingFood.food_sizes?.length ?? 0) > 0 && (
-              <div className="mb-4">
-                <p className="text-sm font-semibold text-gray-900 mb-2">Choose a size</p>
-                <div className="space-y-2">
-                  {customizingFood.food_sizes!.map((size) => (
-                    <label
-                      key={size.id}
-                      className="flex items-center justify-between border rounded-lg px-3 py-2 cursor-pointer text-sm"
-                    >
-                      <span className="flex items-center gap-2 font-medium text-gray-900">
-                        <input
-                          type="radio"
-                          name="food-size"
-                          checked={modalSizeId === size.id}
-                          onChange={() => setModalSizeId(size.id)}
-                        />
-                        {size.name}
-                      </span>
-                      <span className="font-semibold text-gray-800">GH₵{size.price}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {(customizingFood.food_addons?.length ?? 0) > 0 && (
-              <div className="mb-4">
-                <p className="text-sm font-semibold text-gray-900 mb-2">Add extras</p>
-                <div className="space-y-2">
-                  {customizingFood.food_addons!.map((addon) => (
-                    <label
-                      key={addon.id}
-                      className="flex items-center justify-between border rounded-lg px-3 py-2 cursor-pointer text-sm"
-                    >
-                      <span className="flex items-center gap-2 font-medium text-gray-900">
-                        <input
-                          type="checkbox"
-                          checked={modalAddonIds.has(addon.id)}
-                          onChange={(e) => {
-                            const next = new Set(modalAddonIds);
-                            if (e.target.checked) next.add(addon.id);
-                            else next.delete(addon.id);
-                            setModalAddonIds(next);
-                          }}
-                        />
-                        {addon.image_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={addon.image_url}
-                            alt={addon.name}
-                            className="w-8 h-8 rounded object-cover"
-                          />
-                        ) : null}
-                        {addon.name}
-                      </span>
-                      <span className="font-semibold text-gray-800">+GH₵{addon.price}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-between items-center font-bold border-t pt-3 mb-4 text-gray-900">
-              <span>Total</span>
-              <span>
-                GH₵
-                {(customizingFood.food_sizes?.find((s) => s.id === modalSizeId)?.price ??
-                  customizingFood.price) +
-                  (customizingFood.food_addons ?? [])
-                    .filter((a) => modalAddonIds.has(a.id))
-                    .reduce((sum, a) => sum + a.price, 0)}
-              </span>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  setCustomizingFood(null);
-                  setCustomizingCardEl(null);
-                }}
-                className="flex-1 rounded-lg bg-gray-100 text-gray-700 px-4 py-2 text-sm font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmCustomizedAddToCart}
-                className="flex-1 rounded-lg bg-green-700 text-white px-4 py-2 text-sm font-semibold hover:bg-green-800"
-              >
-                Add to cart
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -948,8 +655,8 @@ export default function Home() {
             <div className="mb-4">
               {cart.map((item, i) => (
                 <div key={i} className="flex justify-between text-sm py-1 text-gray-800">
-                  <span>{item.cartLabel ?? item.name}</span>
-                  <span>GH₵{item.cartUnitPrice ?? item.price}</span>
+                  <span>{item.name}</span>
+                  <span>GH₵{item.price}</span>
                 </div>
               ))}
               <div className="flex justify-between font-bold border-t mt-2 pt-2 text-gray-900">
@@ -982,7 +689,7 @@ export default function Home() {
             </div>
 
             <div className="mb-5">
-              <p className="font-semibold mb-2 text-gray-900">How would you like your food?</p>
+              <p className="font-semibold mb-2 text-gray-900">How would you like to get your order?</p>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -1036,7 +743,7 @@ export default function Home() {
                   onChange={(e) => setOrderNote(e.target.value)}
                   maxLength={250}
                   className="w-full border rounded px-3 py-2 text-gray-900"
-                  placeholder="e.g. Please make it mild, no pepper"
+                  placeholder="e.g. Please call me when you arrive"
                   rows={2}
                 />
               </div>
@@ -1115,9 +822,9 @@ export default function Home() {
       <footer className="mt-16 bg-gray-900 text-gray-300">
         <div className="border-b border-gray-800 bg-green-800/40">
           <div className="mx-auto max-w-4xl px-6 py-10 text-center">
-            <h3 className="text-2xl font-bold text-white">Get Exclusive Deals 🍔</h3>
+            <h3 className="text-2xl font-bold text-white">Get Exclusive Deals 🛍️</h3>
             <p className="mt-2 text-green-100">
-              Subscribe to our newsletter for special offers, new menu items, and campus food updates.
+              Subscribe to our newsletter for special offers, new listings, and campus market updates.
             </p>
             <form onSubmit={subscribeNewsletter} className="mt-5 flex flex-col sm:flex-row gap-2 justify-center max-w-md mx-auto">
               <input
@@ -1149,12 +856,12 @@ export default function Home() {
           <div>
             <div className="flex items-center gap-2 mb-3">
               <div className="w-9 h-9 rounded-full bg-green-600 flex items-center justify-center font-bold text-white text-sm">
-                CE
+                CM
               </div>
-              <span className="text-lg font-bold text-white">CampusEats</span>
+              <span className="text-lg font-bold text-white">CampusMall</span>
             </div>
             <p className="text-sm text-gray-400">
-              Delicious food delivered right to your doorstep. Fast, fresh, and affordable for students.
+              Buy and sell anything on campus. Fast, affordable, and run by students, for students.
             </p>
           </div>
 
@@ -1162,8 +869,8 @@ export default function Home() {
             <h4 className="text-white font-semibold mb-3">Quick Links</h4>
             <ul className="space-y-2 text-sm text-gray-400">
               <li><a href="/" className="hover:text-white">Home</a></li>
-              <li><a href="#available-now" className="hover:text-white">Menu</a></li>
-              <li><a href="/sell" className="hover:text-white">Sell food</a></li>
+              <li><a href="#available-now" className="hover:text-white">Browse</a></li>
+              <li><a href="/sell" className="hover:text-white">Sell an item</a></li>
               <li><a href="/my-orders" className="hover:text-white">My orders</a></li>
             </ul>
           </div>
@@ -1171,10 +878,13 @@ export default function Home() {
           <div>
             <h4 className="text-white font-semibold mb-3">Categories</h4>
             <ul className="space-y-2 text-sm text-gray-400">
-              <li><a href="#available-now" className="hover:text-white">Popular items</a></li>
-              <li><a href="#available-now" className="hover:text-white">Snacks</a></li>
-              <li><a href="#available-now" className="hover:text-white">Drinks</a></li>
-              <li><a href="#available-now" className="hover:text-white">Main dishes</a></li>
+              {CATEGORIES.map((c) => (
+                <li key={c}>
+                  <button onClick={() => pickCategory(c)} className="text-left hover:text-white">
+                    {c}
+                  </button>
+                </li>
+              ))}
             </ul>
           </div>
 
@@ -1182,8 +892,7 @@ export default function Home() {
             <h4 className="text-white font-semibold mb-3">Contact Us</h4>
             <ul className="space-y-2 text-sm text-gray-400">
               <li>📍 Campus Student Center</li>
-              <li>📞 Add your phone number</li>
-              <li>✉️ Add your email</li>
+             
               <li>🕐 Mon–Sat: 8AM – 9PM</li>
               <li>🕐 Sunday: 12PM – 9PM</li>
             </ul>
@@ -1191,7 +900,7 @@ export default function Home() {
         </div>
 
         <div className="border-t border-gray-800 py-4 text-center text-xs text-gray-500">
-          © {new Date().getFullYear()} Campus Eats. Built by a student, for students.
+          © {new Date().getFullYear()} Campus Mall. Built by a student, for students.
         </div>
       </footer>
     </main>

@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 export const metadata: Metadata = {
-  title: "Campus Eats",
+  title: "Campus Mall",
   description: "Order food from campus sellers, delivered to you",
 };
 
